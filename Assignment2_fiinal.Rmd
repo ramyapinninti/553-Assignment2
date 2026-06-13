@@ -1,0 +1,1006 @@
+---
+title: "New York City Property Valuation: A Location-Based Analysis"
+author: "Ramya Pinninti"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+    number_sections: yes
+    toc_collapsed: yes
+    code_folding: hide
+    code_download: yes
+    smooth_scroll: yes
+    theme: lumen
+  pdf_document: 
+    toc: yes
+    toc_depth: 4
+    fig_caption: yes
+    number_sections: yes
+    fig_width: 3
+    fig_height: 3
+  word_document: 
+    toc: yes
+    toc_depth: 4
+    fig_caption: yes
+    keep_md: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{css, echo = FALSE}
+#TOC::before {
+  content: "Table of Contents";
+  font-weight: bold;
+  font-size: 1.2em;
+  display: block;
+  color: navy;
+  margin-bottom: 10px;
+}
+
+
+div#TOC li {     /* table of content  */
+    list-style:upper-roman;
+    background-image:none;
+    background-repeat:none;
+    background-position:0;
+}
+
+h1.title {    /* level 1 header of title  */
+  font-size: 22px;
+  font-weight: bold;
+  color: DarkRed;
+  text-align: center;
+  font-family: "Gill Sans", sans-serif;
+}
+
+h4.author { /* Header 4 - and the author and data headers use this too  */
+  font-size: 15px;
+  font-weight: bold;
+  font-family: system-ui;
+  color: navy;
+  text-align: center;
+}
+
+h4.date { /* Header 4 - and the author and data headers use this too  */
+  font-size: 18px;
+  font-weight: bold;
+  font-family: "Gill Sans", sans-serif;
+  color: DarkBlue;
+  text-align: center;
+}
+
+h1 { /* Header 1 - and the author and data headers use this too  */
+    font-size: 20px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: darkred;
+    text-align: center;
+}
+
+h2 { /* Header 2 - and the author and data headers use this too  */
+    font-size: 18px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: navy;
+    text-align: left;
+}
+
+h3 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 16px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: navy;
+    text-align: left;
+}
+
+h4 { /* Header 4 - and the author and data headers use this too  */
+    font-size: 14px;
+  font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: darkred;
+    text-align: left;
+}
+
+/* Add dots after numbered headers */
+.header-section-number::after {
+  content: ".";
+}
+body { background-color:white; }
+
+.highlightme { background-color:yellow; }
+
+p { background-color:white; }
+
+```
+
+
+
+```{r setup, include=FALSE}
+# Global chunk options
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "",
+  fig.width = 10,
+  fig.height = 6,
+  fig.align = "center"
+)
+
+if (!require("kableExtra")) {
+   install.packages("kableExtra")
+   library(kableExtra)
+}
+if (!require("car")) {
+   install.packages("car")
+   library(car)
+}
+if (!require("broom")) {
+   install.packages("broom")
+   library(broom)
+}
+if (!require("patchwork")) {
+   install.packages("patchwork")
+   library(patchwork)
+}
+if (!require("treemapify")) {
+   install.packages("treemapify")
+   library(treemapify)
+}
+if (!require("leaflet")) {      
+   install.packages("leaflet")
+   library(leaflet)
+}
+library(tidyverse)    # For data manipulation and visualization
+library(ggplot2)      # For advanced plotting
+library(naniar)       # For missing data visualization
+library(skimr)        # For compact data summaries
+library(GGally)       # For parallel coordinate plots
+library(plotly)       # For interactive visualizations
+library(DT)           # For interactive tables
+library(scales)       # For formatting numbers
+library(stringr)      # For string operations
+library(patchwork)    # For layout stitching
+library(kableExtra)   # For premium table layouts
+library(car)          # For interactive tables
+
+
+# Custom theme for consistent visual design
+theme_storytelling <- theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", margin = margin(b = 10)),
+    plot.subtitle = element_text(size = 12, color = "grey40"),
+    axis.title = element_text(size = 11),
+    axis.text = element_text(size = 10),
+    legend.position = "bottom",
+    panel.grid.major = element_line(color = "grey90"),
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(20, 20, 20, 20)
+  )
+```
+
+# Background Story and Data Generation Process
+
+How the data was collected:
+This data set was found on Kaggle.com. The target population consists of New York home prices, providing valuable statistics for a prime regional housing market. 
+
+The data set consists of 4802 observations. Further inspection of the data set revealed that missing values were imputed with mean values. The data set with 4802 observations was trimmed to remove observations with imputed values for square footage and number of bathrooms. A total of 3004 valid records were obtained. 
+
+
+**Data Dictionary**
+
+
+```{r}
+# Create an interactive data dictionary
+data_dictionary <- tribble(
+  ~Variable_Name,    ~Description,                                                        ~Variable_Type,
+  "BROKERTITLE",          "Title of the broker",       "Categorical",
+  "TYPE",          "Type of the house",  "Categorical",
+  "PRICE",          "Price of the house",              "Numeric",
+  "BEDS",          "Number of bedrooms",  "Numeric",
+"BATH",          "Number of bathrooms",       "Numeric",
+  "PROPERTYSQFT",          "Square footage of the property
+",  "Numeric",
+  "LOCALITY",          "Locality information",              "Categorical",
+  "SUBLOCALITY",          "Sublocality information",              "Categorical",
+  "LATITUDE",          "Latitude coordinate of the house",       "Numeric",
+  "LONGITUDE",          "Longitude coordinate of the house",  "Numeric"
+)
+
+datatable(
+  data_dictionary,
+  caption = "Table 1: Variable definitions and types for the analysis dataset",
+  rownames = FALSE,
+  options = list(pageLength = 10, dom = 'tip')
+)
+```
+
+
+```{r data_loading, message=FALSE, warning=FALSE}
+
+closeAllConnections()
+
+# PURE text URLs - no brackets, no parentheses, no Markdown corruption
+housing_url <- "https://raw.githubusercontent.com/ramyapinninti/nyc-housing-analysis/main/NY-House-Dataset.csv"
+mapping_url <- "https://raw.githubusercontent.com/ramyapinninti/nyc-housing-analysis/main/nyc_master_zip_map.csv"
+
+temp_housing <- tempfile(fileext = ".csv")
+temp_mapping <- tempfile(fileext = ".csv")
+
+download.file(url = housing_url, destfile = temp_housing, quiet = TRUE)
+download.file(url = mapping_url, destfile = temp_mapping, quiet = TRUE)
+
+df <- read_csv(temp_housing, show_col_types = FALSE)
+zip_master_raw <- read_csv(temp_mapping, show_col_types = FALSE)
+
+unlink(temp_housing)
+unlink(temp_mapping)
+
+manhattan_lat  <- 40.7580
+manhattan_long <- -73.9855
+
+df_comprehensive <- df %>%
+  mutate(
+    extracted_zip = stringr::str_extract(STATE, "\\b\\d{5}\\s*$"),
+    ZIP_JOIN_KEY  = stringr::str_trim(as.character(extracted_zip)),
+    ZIP_NUMERIC   = as.numeric(ZIP_JOIN_KEY)
+  ) %>%
+  filter(!is.na(ZIP_NUMERIC)) %>%
+  
+
+  filter(
+    !TYPE %in% c(
+      "Contingent", "Pending", "For sale", "Under contract", "Coming soon", "Coming Soon", "For Sale", "Land for Sale", "Land for sale", "Foreclosure", "Foreclosure/REO"
+    )
+  ) %>%
+  mutate(
+    DISTANCE_TO_CENTER = if_else(LATITUDE != 0 & LONGITUDE != 0, 
+                                 sqrt((LATITUDE - manhattan_lat)^2 + (LONGITUDE - manhattan_long)^2), 
+                                 NA_real_),
+    LOG_PRICE          = log(PRICE),
+    LOG_SQFT           = log(PROPERTYSQFT)
+  ) %>%
+  
+  # --- NEIGHBORHOOD ASSIGNMENT ---
+  mutate(
+    GRANULAR_NEIGHBORHOOD = case_when(
+      # 1. SPECIFIC ZIP MATCHES FIRST (Highest Priority)
+      ZIP_JOIN_KEY %in% c("10301", "10302", "10310") ~ "Staten Island (North Shore)",
+      ZIP_JOIN_KEY %in% c("10314")                   ~ "Staten Island (Mid-Island)",
+      ZIP_JOIN_KEY %in% c("10303", "10304", "10305") ~ "Staten Island (East Shore)",
+      ZIP_JOIN_KEY %in% c("10306", "10307", "10308", "10309", "10312") ~ "Staten Island (South Shore)",
+      
+      ZIP_JOIN_KEY %in% c("11101", "11102", "11103", "11104", "11105", "11106", "11109", "11120") ~ "Astoria/Long Island City",
+      ZIP_JOIN_KEY %in% c("11372", "11373", "11374", "11375", "11379", "11385") ~ "Forest Hills/Rego Park/Ridgewood",
+      ZIP_JOIN_KEY %in% c("11354", "11355", "11356", "11357", "11358", "11359", "11360") ~ "Flushing/Whitestone",
+      ZIP_JOIN_KEY %in% c("11414", "11415", "11416", "11417", "11418", "11419", "11420", "11421") ~ "Ozone Park/Woodhaven",
+      ZIP_JOIN_KEY %in% c("11411", "11412", "11413", "11422", "11423", "11426", "11427", "11428", "11429", "11432", "11433", "11434", "11435", "11436") ~ "Jamaica/Hollis/St. Albans",
+      ZIP_JOIN_KEY %in% c("11361", "11362", "11363", "11364", "11365", "11366", "11367") ~ "Bayside/Little Neck/Fresh Meadows",
+      ZIP_JOIN_KEY %in% c("11691", "11692", "11693", "11694", "11695", "11697") ~ "The Rockaways",
+      ZIP_JOIN_KEY %in% c("11368", "11369", "11370", "11377") ~ "Jackson Heights/Woodside/Corona",
+      
+      ZIP_JOIN_KEY %in% c("10001", "10011", "10018", "10019", "10020", "10036", "10119", "10121", "10199") ~ "Chelsea/Midtown",
+      ZIP_JOIN_KEY %in% c("10002", "10003", "10009") ~ "Lower East Side/East Village",
+      ZIP_JOIN_KEY %in% c("10004", "10005", "10006", "10007", "10038", "10280", "10281", "10282") ~ "Financial District/Tribeca",
+      ZIP_JOIN_KEY %in% c("10012", "10013", "10014") ~ "Greenwich Village/SoHo",
+      ZIP_JOIN_KEY %in% c("10016", "10017", "10022", "10165", "10173", "10174") ~ "Gramercy/Murray Hill",
+      ZIP_JOIN_KEY %in% c("10023", "10024", "10025", "10069") ~ "Upper West Side",
+      ZIP_JOIN_KEY %in% c("10021", "10028", "10044", "10065", "10075", "10128") ~ "Upper East Side",
+      ZIP_JOIN_KEY %in% c("10026", "10027", "10030", "10031", "10037", "10039") ~ "Central Harlem",
+      ZIP_JOIN_KEY %in% c("10029", "10035") ~ "East Harlem",
+      ZIP_JOIN_KEY %in% c("10032", "10033", "10034", "10040") ~ "Washington Heights/Inwood",
+      
+      
+      ZIP_NUMERIC >= 11201 & ZIP_NUMERIC <= 11256 ~ "Brooklyn (Other)",
+      ZIP_NUMERIC >= 10451 & ZIP_NUMERIC <= 10475 ~ "Bronx (Other)",
+      
+      TRUE ~ "Other/Unknown"
+    ),
+    
+    BOROUGH = case_when(
+      ZIP_NUMERIC >= 10301 & ZIP_NUMERIC <= 10314 ~ "Staten Island",
+      (ZIP_NUMERIC >= 10001 & ZIP_NUMERIC <= 10282) | (ZIP_NUMERIC >= 10101 & ZIP_NUMERIC <= 10199) ~ "Manhattan",
+      ZIP_NUMERIC >= 10451 & ZIP_NUMERIC <= 10475 ~ "Bronx",
+      ZIP_NUMERIC >= 11201 & ZIP_NUMERIC <= 11256 ~ "Brooklyn",
+      (ZIP_NUMERIC >= 11001 & ZIP_NUMERIC <= 11109) | (ZIP_NUMERIC >= 11351 & ZIP_NUMERIC <= 11499) | (ZIP_NUMERIC >= 11691 & ZIP_NUMERIC <= 11697) ~ "Queens",
+      TRUE ~ "Other"
+    )
+  )
+
+
+df_spatial_analysis <- df_comprehensive %>%
+  filter(LATITUDE != 0 & LONGITUDE != 0)
+```
+
+
+
+
+## Business Questions and Hypotheses
+
+The purpose of collecting this dataset was to answer the following practical business questions:
+
+**Business Question 1**: Which New York sublocalities (boroughs) have the highest home prices?
+
+**Business Question 2**: Does location matter more than the square footage of a home for its list price?
+
+**Business Question 3**: How does the average home price vary across different types of homes?
+
+Hypotheses derived from domain knowledge:
+
+**H1**: Location is the most important predictor of housing prices in New York.
+
+**H2**: There is a positive, linear relationship between housing price and the number of bedrooms in a home. 
+
+**H3**: House price will differ based on the house type - for example, co-ops should have lower prices on average. 
+
+These hypotheses will guide our exploratory visual analysis and help us focus the narrative.
+
+
+# Visual Exploratory Analytic Plan (What to Visualize)
+
+**Narrative of the plan**: Before building any predictive models or dashboards, we must thoroughly understand the structure, quality, and underlying patterns in the data. 
+
+The following visual exploratory data analysis (V-EDA) plan is designed to systematically examine each variable, uncover hidden relationships, and validate — or challenge — our initial assumptions. 
+The plan is organized into three logical phases: (1) a high-level inspection for data integrity and missingness, (2) univariate profiling of individual variables to understand their distributions, and (3) bivariate and multivariate analyses to explore relationships central to our business questions.
+
+## Overall Data Inspection — Missing Values and Data Quality
+
+**Goal**: 
+
+* Assess the completeness and overall health of the dataset before diving into analysis.
+
+* Visualize the missing data pattern using an aggregated heatmap or upset plot.
+
+* Examine the proportion of missing values per variable and identify any systematic missingness patterns.
+
+* Check for potential data entry errors (e.g., implausible age values, negative amounts).
+
+
+## Variable Inspections — Distribution Analysis
+
+**Goal**: Understand the central tendency, spread, and shape of each variable individually.
+
+* **Numeric variables**: Histograms with overlaid density curves, supplemented by boxplots to detect outliers.
+
+* **Categorical variables**: Bar charts ordered by frequency, supplemented by proportional displays (waffle or treemap alternatives if needed).
+
+* **Date/time variables**: Time series trend plots to understand temporal patterns (if applicable).
+
+
+## Relationships Between Variables
+
+**Goal**: Investigate the associations and interactions that underpin our business questions.
+
+* **Numerical vs. Numerical**: Scatterplots with local regression (LOESS) smoothers to detect linear/non-linear trends. Correlation matrices with hierarchical clustering.
+
+* **Categorical vs. Categorical**: Grouped and stacked bar charts to compare proportions. Mosaic plots for complex contingency tables.
+
+* **Numerical vs. Categorical**: Side-by-side boxplots, violin plots, and ridge density plots to compare distributions across categories.
+
+
+# Effective Visual Design 
+
+
+## Section: Data Quality and Missing Value Assessment
+
+### Missing Data Pattern
+
+Before interpreting any patterns in the data, we must first address the question of missingness. Gaps in the data can introduce bias and undermine the validity of our conclusions if not properly understood. The data set was inspected for missing values and none were found. However, the data set was cleaned significantly as outlined below. 
+
+### Data Inspection and Cleaning: 
+
+Data was manually inspected row by row to ensure accuracy of the NYC Housing data. The ‘State’ variable in the data set was inspected and found to include a combination of neighborhood and borough names, instead of the state (New York). For instance, row 1 of the alphabetically sorted data set lists an address in Arverne, NY. Arverne is a neighborhood in Queens, New York. The ‘state’ variable also includes values such as ‘Bronx, NY’ and ‘Brooklyn, NY,’ which are NYC boroughs. 
+
+The variable ‘Administrative_Area_Level_2’ was inspected and also found to include inconsistent values, such as ‘New York’ and ‘United States.’ As the ‘Locality’ variable included similar data inconsistencies, the ‘Sublocality’ and ‘Street_Name’ variables were considered for their potential analytical value as categorical data points. ‘Street_Name’ is not related to the street of the address and likely corresponds to the designated postal city for mail purposes. For example, two units are located in Astoria, Queens, NY, while their ‘Street_Name’ is Long Island City. The main addresses corresponding to these data points are 25-74 34th St Unit 1C, Astoria, NY 11103 and 33-52 Crescent St Unit 7C, Astoria, NY 11106. These addresses are included under the variable ‘Formatted_address’ as Long Island City properties. 
+
+For data visualization purposes, the variables ‘Locality,’ ‘Sublocality,’ ‘Street_Name,’ ‘Long_Name,’ ‘Main_Address,’ ‘Formatted_Address,’ and ‘Administrative_Area_Level_2’ are redundant and provide little value, without significant data cleaning. A categorical variable with high cardinality such as ‘Brokertitle’ is not important in this discussion, as the focus is on borough, housing type, and trends among different NYC neighborhoods. 
+
+The State variable was parsed using regular expressions to extract valid, 5-digit zip codes. Thesezip codes were then used  to map records into standardized, mutually exclusive macro-boroughs and granular sub-market neighborhoods. A sweep of the categorical TYPE variable revealed hidden  noise; entries explicitly labeled as non-residential, foreclosure states, or vacant plots were completely expunged from the sample for the breakdown of housing type by borough and for the regression analysis. 
+
+
+## Univariate Distribution Analysis
+
+### Distributions of Key Numeric Variables
+
+In order to detect skewness, multimodality, or extreme outliers in the numerical variables, univariate distribution analysis was performed using histogram construction. Histograms are combined with density estimates to show both the frequency and probability density. 
+
+```{r plot_continuous_independent, fig.align='center', fig.height=7, fig.width=9, message=FALSE, warning=FALSE}
+
+# Filter out coordinate placeholders globally
+df_clean_geo <- df %>% filter(LATITUDE != 0 & LONGITUDE != 0)
+
+# 1. Price Plot (Log Scale)
+p_price <- ggplot(df_clean_geo, aes(x = PRICE)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 35, fill = "#2c7fb8", alpha = 0.6, color = "white") +
+  geom_density(color = "#081d58", linewidth = 1) +
+  geom_vline(aes(xintercept = mean(PRICE, na.rm=TRUE)), linetype = "dashed", color = "red") +
+  geom_vline(aes(xintercept = median(PRICE, na.rm=TRUE)), linetype = "solid", color = "darkgreen") +
+  scale_x_log10(labels = label_dollar()) +
+  labs(title = "Property Price (Log Scale)", x = "Price (USD)", y = "Density") +
+  theme_minimal()
+
+# 2. Square Footage Plot 
+p_sqft <- ggplot(df_clean_geo, aes(x = PROPERTYSQFT)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 35, fill = "#41b6c4", alpha = 0.6, color = "white") +
+  geom_density(color = "#081d58", linewidth = 1) +
+  geom_vline(aes(xintercept = mean(PROPERTYSQFT, na.rm=TRUE)), linetype = "dashed", color = "red") +
+  geom_vline(aes(xintercept = median(PROPERTYSQFT, na.rm=TRUE)), linetype = "solid", color = "darkgreen") +
+  scale_x_log10(labels = label_comma()) + # Log scale fixes the stretching anomaly!
+  labs(title = "Property Square Footage (Log Scale)", x = "Square Feet", y = "Density") +
+  theme_minimal()
+
+# 3. Latitude Plot (Linear)
+p_lat <- ggplot(df_clean_geo, aes(x = LATITUDE)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 35, fill = "#7fcdbb", alpha = 0.6, color = "white") +
+  geom_density(color = "#081d58", linewidth = 1) +
+  geom_vline(aes(xintercept = mean(LATITUDE, na.rm=TRUE)), linetype = "dashed", color = "red") +
+  geom_vline(aes(xintercept = median(LATITUDE, na.rm=TRUE)), linetype = "solid", color = "darkgreen") +
+  labs(title = "Latitude Coordinate", x = "Latitude", y = "Density") +
+  theme_minimal()
+
+# 4. Longitude Plot (Linear)
+p_long <- ggplot(df_clean_geo, aes(x = LONGITUDE)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 35, fill = "#c7e9b4", alpha = 0.6, color = "white") +
+  geom_density(color = "#081d58", linewidth = 1) +
+  geom_vline(aes(xintercept = mean(LONGITUDE, na.rm=TRUE)), linetype = "dashed", color = "red") +
+  geom_vline(aes(xintercept = median(LONGITUDE, na.rm=TRUE)), linetype = "solid", color = "darkgreen") +
+  labs(title = "Longitude Coordinate", x = "Longitude", y = "Density") +
+  theme_minimal()
+
+# Combine into 2x2 grid
+(p_price + p_sqft) / (p_lat + p_long) + 
+  plot_annotation(
+    title = "Univariate Profiles: Continuous Variable Distributions",
+    subtitle = "Red dashed line = Mean; Green solid line = Median"
+  )
+```
+
+An examination of the univariate distributions reveals several important patterns. Variables such as price and propertysqft show significantly right-skewed distributions, indicating that a subset of properties have extremely high list prices and square footage. 
+
+Latitude shows a bimodal distribution, while longitude is unimodal. The latitude distribution reflects two high-density housing clusters, separating the lower-latitude Brooklyn cluster from Manhattan and the Bronx.
+
+Plotting price without a scale adjustment initially resulted in an indecipherable graph due to the range of possible x-values. Based on an inspection of the data set, the largest listed price was 2,147,483,647. This listing was inspected for accuracy using online real estate data, and it corresponds to a property that was last listed for a price of 2,595,000. This data entry error was removed from the data set.
+
+The second highest value is 195,000,000, another noticeable outlier. This property listing was inspected and found to be accurate. The property corresponds to a penthouse in Central Park with a square footage of 17,545. The lower end of observations for price were examined and the property values found to be feasible based on square footage values being under 500 sqft, despite being located in Manhattan. For a future analysis, real-time data may be scraped to predict NYC housing trends using 2026 home prices, as the NYC housing market is known to be volatile. 
+
+```{r plot_discrete, fig.align='center', fig.height=4, fig.width=9, message=FALSE, warning=FALSE}
+
+
+df_discrete_clean <- df %>%
+  filter(!is.na(BEDS) & !is.na(BATH)) %>%
+  filter(BEDS <= 10 & BATH <= 10) 
+
+
+p_beds <- ggplot(df_discrete_clean, aes(x = factor(BEDS))) +
+  geom_bar(fill = "#7fcdbb", alpha = 0.8, color = "white", width = 0.7) +
+  scale_y_continuous(labels = label_comma()) +
+  labs(
+    title = "Bedroom Count Distribution",
+    x = "Number of Bedrooms", 
+    y = "Total Properties Listed"
+  ) +
+  theme_minimal() +
+  theme(panel.grid.minor = element_blank())
+
+
+p_baths <- ggplot(df_discrete_clean, aes(x = factor(BATH))) +
+  geom_bar(fill = "#41b6c4", alpha = 0.8, color = "white", width = 0.7) +
+  scale_y_continuous(labels = label_comma()) +
+  labs(
+    title = "Bathroom Count Distribution",
+    x = "Number of Bathrooms", 
+    y = "Total Properties Listed"
+  ) +
+  theme_minimal() +
+  theme(panel.grid.minor = element_blank())
+
+
+p_beds + p_baths + 
+  plot_layout(axis_titles = "collect") + 
+  plot_annotation(
+    title = "Structural Profiles: Discrete Property Attributes",
+    subtitle = "Cleaned distributions focusing on core residential properties (<= 10 rooms)"
+  )
+```
+
+Bar plots were constructed to observe trends in bathroom and bedroom counts, and the range of values was limited to less than or equal to ten to account for data entry errors and focus on a reasonable spectrum of rooms. As expected, the number of bedrooms is most commonly 2-3 and the number of bathrooms 1-2 in the data set. 
+
+The observed distributional characteristics carry direct implications for model development. Variables with right-skewed distributions were log-transformed. Latitude and longitude coordinates were transformed using distance to the center of Manhattan as a reference, and the significance of distance to center will be explored using regression analysis.
+
+
+### Distributions of Categorical Variables
+
+Categorical variables define the groups within the data that are essential to NYC housing-related business questions. The frequency breakdowns below provide insight into frequencies among classes, highlighting insufficient data availability within classes and allowing for a visual comparison between NYC's top neighborhoods. 
+
+```{r categorical_analysis, fig.align='center', fig.height=10, fig.width=9, message=FALSE, warning=FALSE}
+
+
+df_valid_counts <- df_comprehensive %>%
+
+  filter(
+    !GRANULAR_NEIGHBORHOOD %in% c("Brooklyn (Other)", "Bronx (Other)", "Other/Unknown")
+  ) %>%
+  count(GRANULAR_NEIGHBORHOOD, name = "count", sort = TRUE)
+
+
+top_20_names <- df_valid_counts %>%
+  slice_max(count, n = 20, with_ties = FALSE) %>%
+  pull(GRANULAR_NEIGHBORHOOD)
+
+
+df_top_20 <- df_valid_counts %>%
+  filter(GRANULAR_NEIGHBORHOOD %in% top_20_names)
+
+p_bar <- ggplot(df_top_20, aes(x = reorder(GRANULAR_NEIGHBORHOOD, count), y = count)) +
+  geom_col(fill = "#2c7fb8", width = 0.7) +
+  scale_y_continuous(labels = label_comma()) +
+  coord_flip() +
+  labs(
+    title = "Absolute Listing Volume by Neighborhood",
+    x = "Granular Neighborhood",
+    y = "Total Number of Properties Listed"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.minor = element_blank())
+
+
+p_treemap <- ggplot(df_top_20, aes(area = count, fill = count, label = GRANULAR_NEIGHBORHOOD)) +
+  geom_treemap(color = "white", linewidth = 0.8) +
+  geom_treemap_text(
+    fontface = "bold", 
+    color = "white", 
+    place = "center", 
+    reflow = TRUE,
+    min.size = 6
+  ) +
+  scale_fill_gradient(low = "#7fcdbb", high = "#081d58", labels = label_comma()) +
+  labs(
+    title = "Proportional Market Share of Top 20 Neighborhoods",
+    fill = "Total Listings"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0) 
+  )
+
+
+p_bar / p_treemap +
+  plot_layout(heights = c(1, 1)) + 
+  plot_annotation(
+    title = "Categorical Profile: Distribution of Top 20 Property Locations",
+    subtitle = "Absolute frequency counts supplemented by a relative proportional mosaic display",
+    theme = theme(
+      plot.title = element_text(face = "bold", size = 14, hjust = 0),
+      plot.subtitle = element_text(size = 11, hjust = 0)
+    )
+  )
+```
+
+
+Observation of the categorical variable frequencies shows differences in the representation of NYC neighborhoods. There are certain specific neighborhoods that are hot spots in the data set (e.g., Staten Island South Shore, Coney Island/Sheepshead Bay, and Forest Hills/Rego Park/Ridgewood). The volume by neighborhoods metrics were initially created using  the NYC United Hospital Fund (UHF) neighborhood map. There were limitations to utilizing the NYC UHF data set with zip code to neighborhood mapping, as only 598 observations were zip code matched due to neighborhood combinations. 
+
+The full list of zip codes was mapped to neighborhoods to avoid this data omission error, preserving the sample size and eliminating a potential classification bias.
+
+The proportional market share reveals that neighborhoods known to have higher property values occur with high frequency in the sample, at a granular level. The Upper East Side, Forest Hills, and Staten Island South Shore are all areas with a high cost of living and property values, compared to locations such as the Northeast Bronx or East New York/Brownsville. 
+
+
+```{r borough-visualization, fig.width=8, fig.height=5}
+
+df_borough <- df_comprehensive %>%
+
+  filter(BOROUGH != "Other")
+
+borough_counts <- df_borough %>%
+  count(BOROUGH, name = "Listing_Count") %>%
+  mutate(Percentage = (Listing_Count / sum(Listing_Count)) * 100)
+
+
+ggplot(borough_counts, aes(x = reorder(BOROUGH, Listing_Count), y = Listing_Count)) +
+  geom_bar(stat = "identity", fill = "#2b5c8f", width = 0.65) +
+  geom_text(
+    aes(label = paste0(comma(Listing_Count), " (", round(Percentage, 1), "%)")),
+    hjust = -0.1, 
+    size = 4,
+    fontface = "bold"
+  ) +
+  scale_y_continuous(
+    labels = comma, 
+    expand = expansion(mult = c(0, 0.15)) 
+  ) +
+  coord_flip() + 
+  labs(
+    title = "Distribution of Property Listings Across NYC Boroughs",
+    subtitle = "Exhaustive programmatic classification based on validated postal zones",
+    x = NULL,
+    y = "Total Number of Listings",
+    caption = paste0("Total Sample Size (N) = ", comma(sum(borough_counts$Listing_Count)))
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14, margin = margin(b = 5)),
+    plot.subtitle = element_text(color = "dimgray", size = 11, margin = margin(b = 15)),
+    panel.grid.major.y = element_blank(),  
+    axis.text.y = element_text(face = "bold", color = "black", size = 11),
+    plot.caption = element_text(size = 9, face = "italic", color = "gray30", margin = margin(t = 15))
+  )
+```
+
+Looking at a higher level breakdown of NYC region, the NYC boroughs most represented in the sample are Brooklyn and Manhattan, representing over 50 percent of the data, while Staten Island and Queens only make up 16.1 and 17.5 percent, respectively.
+
+For modeling purposes, while the neighborhood-level analysis highlights distinct localized market clusters, incorporating such a granular categorical variable into the regression model may result in overfitting. Aggregating the data to the borough level strikes a balance between capturing geographic variation and maintaining structural model parsimony. To protect the integrity of these estimations, rare property types with fewer than 20 observations will be programmatically collapsed into an 'Other' group. Future iterations of this analysis could bridge these two spatial scales by utilizing a more robust, validated ZIP-to-neighborhood mapping matrix to safely introduce localized sub-market parameters.
+
+## Relationships Between Variables
+
+### Correlation and Trend Discovery
+
+The interplay between numeric variables is the engine of many predictive models. A scatterplot matrix augmented with correlation coefficients and LOESS trend lines allows us to quickly gauge the strength and direction of linear associations, detect potential multicollinearity, and uncover non-linear patterns that simple correlations might obscure.
+
+```{r correlation-matrix-with-distance, message=FALSE, warning=FALSE, fig.width=11, fig.height=11}
+
+df_matrix_data <- df_spatial_analysis %>%
+  select(
+    `Log Price`      = LOG_PRICE, 
+    `Log SqFt`       = LOG_SQFT,
+    `Baths`          = BATH, 
+    `Beds`           = BEDS,
+    `Dist to Center` = DISTANCE_TO_CENTER
+  ) %>%
+  drop_na()
+
+
+custom_scatter <- function(data, mapping, ...) {
+  ggplot(data = data, mapping = mapping) +
+    geom_point(color = "#4a90e2", alpha = 0.3, size = 1) + 
+    geom_smooth(method = "loess", color = "#d0021b", se = FALSE, linewidth = 1) +
+    theme_minimal()
+}
+
+custom_density <- function(data, mapping, ...) {
+  ggplot(data = data, mapping = mapping) +
+    geom_density(fill = "#4a90e2", alpha = 0.4, color = "#2c5c8f") +
+    theme_minimal()
+}
+
+
+ggpairs(
+  df_matrix_data,
+  lower = list(continuous = custom_scatter),
+  diag  = list(continuous = custom_density),
+  upper = list(continuous = wrap("cor", size = 4.5, fontface = "bold", color = "black"))
+) +
+  labs(
+    title = "Exploratory Matrix: Inter-Variable Relationships & Spatial Decay Trends",
+    subtitle = "Logarithmic transformations applied to Price and SqFt to normalize extreme outlier compression"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 15, margin = margin(b = 5)),
+    plot.subtitle = element_text(color = "dimgray", size = 11, margin = margin(b = 20)),
+    strip.background = element_rect(fill = "#f0f4f8", color = "transparent"), # Distinct headers
+    strip.text = element_text(face = "bold", color = "#2c5c8f", size = 11)
+  )
+
+```
+
+
+
+The pairwise plot reveals that log price shows the most correlation with square feet (0.759), followed by baths (0.537), and beds (0.391). There is a moderate negative correlation between price and distance_to_center. The LOESS curve shows a decay with distance from the center, with prices decaying quickly further from Manhattan and rising at large distances, reflecting regions such as Staten Island. This pattern indicates that the effect of distance is not linear. Including a quadratic term for distance allows the model to capture this curvature.
+
+These weak correlations imply that multicollinearity is unlikely to be a concern for linear models. However, the LOESS smoothers should be examined carefully for non-linear patterns that Pearson coefficients may obscure. If any smoother reveals curvature (e.g., a plateau or threshold effect), a generalized additive model (GAM) or piecewise regression would be more appropriate than standard linear regression. Additionally, any fanning or funnel-shaped pattern in the scatterplots would indicate heteroscedasticity, warranting robust standard errors or variance-stabilizing transformations.
+
+### Comparing Distributions Across Groups 
+
+To answer questions about group differences, for instance the distribution of housing type by granular neighborhood, an interactive map was created to visualize NYC neighborhoods.
+
+```{r interactive_spatial_map, fig.width=10, fig.height=7, message=FALSE, warning=FALSE}
+
+df_map_clean <- df_spatial_analysis %>%
+  filter(!is.na(PRICE)) %>%
+  mutate(
+    
+    CLEAN_TYPE = forcats::fct_lump(as.factor(TYPE), n = 5),
+   
+    POPUP_TEXT = paste0(
+      "<div style='font-family: Arial, sans-serif; size: 12px;'>",
+      "<strong>Property Type:</strong> ", CLEAN_TYPE, "<br/>",
+      "<strong>Borough:</strong> ", BOROUGH, "<br/>",
+      "<strong>Price:</strong> <span style='color: #2c5c8f; font-weight: bold;'>", dollar(PRICE), "</span><br/>",
+      "<strong>Bed/Bath:</strong> ", BEDS, " Bed / ", BATH, " Bath<br/>",
+      "<strong>Square Footage:</strong> ", comma(PROPERTYSQFT), " sq ft",
+      "</div>"
+    )
+  )
+
+
+color_palette <- colorFactor(
+  palette = "Set2", 
+  domain  = df_map_clean$CLEAN_TYPE
+)
+
+
+leaflet(df_map_clean, width = "100%", height = "600px") %>%
+
+  addProviderTiles(providers$CartoDB.Positron, group = "Clean Baseline (Positron)") %>%
+ 
+  addProviderTiles(providers$CartoDB.DarkMatter, group = "Dark Mode High-Contrast") %>%
+  
+  #  property coordinate data points
+  addCircleMarkers(
+    lng = ~LONGITUDE,
+    lat = ~LATITUDE,
+    color = ~color_palette(CLEAN_TYPE),
+    fillOpacity = 0.65,
+    radius = 4, 
+    stroke = FALSE,
+    popup = ~POPUP_TEXT,
+    group = "Property Listings"
+  ) %>%
+  
+  
+  addLegend(
+    position = "bottomright",
+    pal = color_palette,
+    values = ~CLEAN_TYPE,
+    title = "Property Classifications",
+    opacity = 0.8
+  ) %>%
+  
+  
+
+  addControl(
+    html = "<div style='background: white; padding: 8px; border-radius: 8px; 
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.2); text-align: center; font-family: Arial, sans-serif;'>
+              <img src='images/nyc.jpg' style='width: 150px; height: auto; display: block; border-radius: 4px; margin-bottom: 4px;'>
+              <span style='font-size: 12px; font-weight: bold; color: #475569;'>2024</span>
+            </div>",
+    position = "bottomleft", 
+    className = "map-image-overlay"
+  ) %>%
+  
+  addLayersControl(
+    baseGroups = c("Clean Baseline (Positron)", "Dark Mode High-Contrast"),
+    overlayGroups = c("Property Listings"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+```
+
+
+The plot confirms the dominance of condominiums in Manhattan real estate, and shows certain pockets of Manhattan where condos are heavily concentrated. Condos are heavily concentrated in the Financial District, along with Tribeca, Midtown, and SoHo. Likewise, a heavy concentration of co-op style housing is shown by concentrated dark green points on the map, spanning across Queens Boulevard. 
+
+In the first visualization phase, Staten Island displayed a high concentration of housing under the 'other' category. In this data set, this includes housing type categories such as 'contingent' or 'pending', 'land for sale', or 'for sale', which are not home types. These home types were filtered out to prevent inaccurate representations and errors during regression analysis.
+
+For modeling, leaving uncleaned classifications would introduce structural distortions. For instance, 'land for sale' category is problematic, as it does not represent structural square footage. 
+
+### Contingency and Association
+
+In New York City housing analysis, it is key to understand the patterns underlying categorical variables such as housing type and borough. A stacked bar chart allows for an easy visualization of the housing type proportions across regions, allowing for an analysis of whether the distribution of housing type shifts meaningfully across NYC boroughs. A boxplot allows for a further comparison of median listing price across housing type.
+
+
+```{r contingency_analysis, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+
+
+df_contingency <- df_comprehensive %>%
+  filter(BOROUGH != "Other") %>%
+  mutate(
+    CLEAN_TYPE = forcats::fct_lump(as.factor(TYPE), n = 5)
+  )
+
+
+ggplot(df_contingency, aes(x = BOROUGH, fill = CLEAN_TYPE)) +
+  geom_bar(position = "fill", width = 0.65) + 
+  scale_y_continuous(labels = label_percent()) +
+  scale_fill_brewer(palette = "Set2") + 
+  labs(
+    title = "Proportional Distribution of Property Types Across NYC Boroughs",
+    subtitle = "Analysis of geographic contingency and structural real estate composition",
+    x = "Borough",
+    y = "Relative Proportion (%)",
+    fill = "Property Type"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14, hjust = 0),
+    plot.subtitle = element_text(color = "dimgray", size = 11, hjust = 0, margin = margin(b = 15)),
+    panel.grid.major.x = element_blank(),
+    axis.text = element_text(color = "black", face = "bold"),
+    legend.position = "right"
+  )
+
+
+contingency_table <- table(df_contingency$BOROUGH, df_contingency$CLEAN_TYPE)
+#print(contingency_table) 
+```
+
+
+The cross-tabulation reveals that the distribution of housing type is not uniform across all boroughs, as expected. Manhattan shows a heavy concentration of condos, Staten Island is dominated by single-family homes, and the Bronx has a large proportion of multi-family homes and co-ops.
+
+
+```{r housing_type_boxplot, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(scales)
+
+
+df_boxplot_data <- df_comprehensive %>%
+  filter(BOROUGH != "Other") %>%
+  mutate(
+    CLEAN_TYPE = forcats::fct_lump(as.factor(TYPE), n = 5)
+  ) %>%
+  filter(CLEAN_TYPE != "Other") # Remove the aggregate 'Other' group to keep categories pure
+
+
+ggplot(df_boxplot_data, aes(x = reorder(CLEAN_TYPE, LOG_PRICE, FUN = median), y = LOG_PRICE, fill = CLEAN_TYPE)) +
+  geom_boxplot(alpha = 0.7, outlier.color = "gray60", outlier.size = 1, width = 0.6) +
+  scale_fill_brewer(palette = "Pastel1") +
+  coord_flip() + # Makes long category names much easier to read
+  labs(
+    title = "Log-Transformed Valuation Profiles by Property Type",
+    subtitle = "Side-by-side box plots evaluating price distributions and market tier segments",
+    x = "Property Type",
+    y = "Log of Listing Price (LOG_PRICE)",
+    fill = "Property Type"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14, hjust = 0),
+    plot.subtitle = element_text(color = "dimgray", size = 11, hjust = 0, margin = margin(b = 15)),
+    panel.grid.minor = element_blank(),
+    axis.text = element_text(color = "black", face = "bold"),
+    legend.position = "none" # Legend is redundant since the y-axis is already labeled
+  )
+```
+
+
+Box plots were constructed to visualize how the housing market actually varies across the housing types. Townhomes have the highest median price and co-ops have the lowest. Condos and homes have a similar median, but condo prices show more variability. The townhome category is the only housing type without a dense tail of outliers.
+
+For modeling purposes, price analysis should account for housing structural and spatial differences. An interaction term borough x type is recommended to capture how the price of housing type changes across different geographic spaces.
+
+
+
+```{r final_hedonic_regression, message=FALSE, warning=FALSE}
+
+
+df_comprehensive <- df_comprehensive %>%
+  mutate(
+    CLEAN_TYPE = forcats::fct_lump(as.factor(TYPE), n = 5)
+  )
+
+
+df_modeling_data <- df_comprehensive %>%
+  filter(BOROUGH != "Other") %>%
+  filter(CLEAN_TYPE != "Other") %>%
+  drop_na(LOG_PRICE, LOG_SQFT, BEDS, BATH, DISTANCE_TO_CENTER, BOROUGH, CLEAN_TYPE)
+
+
+housing_model <- lm(
+  LOG_PRICE ~ LOG_SQFT + BEDS + BATH + 
+    DISTANCE_TO_CENTER + I(DISTANCE_TO_CENTER^2) + 
+    BOROUGH * CLEAN_TYPE,
+  data = df_modeling_data
+)
+
+```
+
+```{r}
+library(broom)
+library(knitr)
+library(kableExtra)
+
+tidy(housing_model) %>%
+  kable(
+    digits = 3, 
+    col.names = c("Predictor", "Estimate", "Std. Error", "t-statistic", "p-value"),
+    caption = "Linear Regression Model Coefficients"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    position = "center"
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "lightblue")
+
+anova(housing_model) %>%
+  kable(
+    digits = 3,
+    col.names = c("Df", "Sum of Squares", "Mean Square", "F-Value", "p-value"),
+    caption = "Analysis of Variance (ANOVA) Table"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    position = "center"
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "lightblue")
+```
+
+```{r regression_diagnostics, fig.height=8, fig.width=8}
+
+par(mfrow = c(2, 2))
+
+
+plot(housing_model, 
+     col = alpha("#4a90e2", 0.4), 
+     pch = 16)
+
+
+par(mfrow = c(1, 1))
+
+
+vif_matrix <- car::vif(housing_model, type = "predictor")
+
+as.data.frame(vif_matrix) %>%
+  kable(
+    digits = 3,
+    caption = "Variance Inflation Factors (Multicollinearity Check)"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    position = "center"
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "lightblue")
+```
+
+# Linear Regression Analysis and Recommendations
+
+**Diagnostics**: 
+
+**Residuals**: 
+Residuals are centered around zero with no strong curvature — the linearity assumption holds.
+A slight upward trend suggests minor underprediction for high‑priced properties.
+
+**Normality**: 
+In the QQ-plot, outliers are observed at the lower and upper ends, creating a slight S-shaped curve. These likely correspond to atypical properties such as luxury or distressed listings. Robust standard errors or influence diagnostics could be used to confirm stability and this is recommended for an additional analysis. Given the overall normality, the sample size, and the absence of extreme leverage, the model remains reliable for inference.
+
+**Scale–Location Plot**:  
+Variance is observed to be roughly constant across fitted values, but a faint upward slope suggests mild heteroscedasticity.
+
+**Residuals vs Leverage**:  
+No points exceed Cook’s distance threshold; a few labeled observations show moderate influence but not enough to distort the model.
+
+**Multicollinearity**: 
+Variance Inflation Factors (VIFs) are all below 2 for the adjusted GVIF metric, indicating no severe multicollinearity.
+The moderate correlation among size‑related variables (Beds, Baths, SqFt) is expected but not problematic.
+
+**Model Analysis**: 
+
+A linear regression was run as shown below. The overall R^2 was found to be 0.85, which indicates strong explanatory power of the model when considering the variability in housing price. The log_sqft, beds, bath, distance to center (distance and distance^2), borough and type, and the borough x type interactions were found to be significant. 
+
+Although several individual dummy coefficients for BOROUGH and CLEAN_TYPE are not statistically significant, the categorical variables themselves must remain in the model. Dummy variables represent levels of a single factor, and removing individual levels would change the reference category and invalidate the interpretation of the remaining coefficients. 
+
+The ANOVA table confirms that both BOROUGH and CLEAN_TYPE have highly significant overall effects, and the full categorical predictors are retained even if some individual contrasts are not.
+
+lm(formula = LOG_PRICE ~ LOG_SQFT + BEDS + BATH + DISTANCE_TO_CENTER + 
+    I(DISTANCE_TO_CENTER^2) + BOROUGH * CLEAN_TYPE, data = df_modeling_data)
+
+
+**Summary**: 
+The model results show that the strongest predictor of price is log square footage. Additionally, distance to Manhattan has a nonlinear effect. Prices fall sharply with distance from Manhattan’s core, flatten in mid‑distance boroughs, and rise again in areas like Staten Island and parts of Queens. 
+
+Relative to the reference borough (the Bronx), Manhattan and Brooklyn have significant price differences based on their dummy coefficients (0.467702 and 0.644991). Practically interpreted and converted from the log price, this indicates that Manhattan properties are 90% more expensive than Bronx properties after controlling for size, beds, baths, distance, and housing type.
+
+
+## How to Use Visual Insights to Support Business Decisions
+
+The visual evidence we have gathered directly informs several high-priority business decisions:
+
+**Sublocality Price Hierarchy (BQ1 & H3 Validated):**:Our box plots and regression coefficients confirm that the NYC housing market is highly stratified. Townhomes command the highest overall median tier, while Co-ops represent the structural affordability floor. However, location acts as a massive modifier. Recommendation: Real estate investment portfolios must treat structural types as localized sub-markets rather than evaluating them on a uniform city-wide scale.
+
+**Location vs. Space (BQ2 & H1 Refined)**: Our spatial mapping and regression reveal that location does not simply outpace square footage—they interact non-linearly. Moving away from the urban center triggers a steep, quadratic price drop that doesn't bottom out until 0.325 coordinate units away. Recommendation: Prioritize high-density acquisitions (Condos) within the hyper-premium Midtown radius, but pivot to high-footprint structural assets (Houses) once past the outer suburban turning point.
+
+**Room Layout Analysis (H2 Rejected)**: The exploratory bar charts and negative BEDS coefficient reject a simple linear bedroom premium. When controlling for total square footage, crowding more bedrooms into a fixed footprint penalizes a property's value. Recommendation: Architectural layouts and renovation strategies should optimize for open space and bathroom additions rather than artificial bedroom maximizing.
+
+## How to Use Visual Findings to Inform Subsequent Data Analysis and Modeling
+
+The visual EDA has laid a robust foundation for the next phase of the data science lifecycle:
+
+**Feature Engineering**: the diagnostic Q-Q plot exhibits heavy-tailed behavior at the extremes due to luxury outliers, but the stabilized Scale-Location plot validates that the log-price transformation successfully protected the model from severe heteroscedasticity. Future iterations can leverage robust regression or tree-based ensembles (Random Forest, XGBoost).
+
+**Dashboard Blueprint**: To put these insights into production, an interactive dashboard with the following elements is proposed:
+  - Market Monitor: An automated data quality tracker that flags data-entry noise (to control for categories such as "other" that contain irrelevant listings (foreclosure, pending, etc.)).
+  - Geospatial Deep-Dive: Incorporating the interactive Leaflet canvas, allowing agents to filter properties dynamically by Borough and CLEAN_TYPE (type).
+
+
+
